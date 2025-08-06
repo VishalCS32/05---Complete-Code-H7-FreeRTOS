@@ -1,0 +1,8 @@
+../Core/Src/freertos.c:132:6:MX_FREERTOS_Init	4
+../Core/Src/freertos.c:199:6:StartDefaultTask	1
+../Core/Src/freertos.c:216:6:Task2_init	1
+../Core/Src/freertos.c:232:6:Task_1khz_init	1
+../Core/Src/freertos.c:240:6:Task_100Hz_init	1
+../Core/Src/freertos.c:253:6:InitTask	1
+../Core/Src/freertos.c:284:6:LedTask	1
+../Core/Src/freertos.c:300:6:AircraftLightsTask	1

@@ -1,0 +1,5 @@
+../Core/LED/MAIN_BOARD_RGB/ws2812.c:16:6:WS2812_Init	2
+../Core/LED/MAIN_BOARD_RGB/ws2812.c:22:6:WS2812_SetGlobalBrightness	3
+../Core/LED/MAIN_BOARD_RGB/ws2812.c:28:6:WS2812_SetColor	4
+../Core/LED/MAIN_BOARD_RGB/ws2812.c:39:6:WS2812_Send	6
+../Core/LED/MAIN_BOARD_RGB/ws2812.c:73:6:main_led	6

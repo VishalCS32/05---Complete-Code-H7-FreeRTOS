@@ -1,0 +1,7 @@
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:27:20:swap_buffers	16	static
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:36:6:AIRCRAFTLIGHTS_Init	24	static
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:46:6:AIRCRAFTLIGHTS_SetGlobalBrightness	16	static
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:55:6:aircraftlights	32	static
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:70:13:encode_leds_to_pwm	40	static
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:91:6:aircraftlights_update	8	static,ignoring_inline_asm
+../Core/LED/AIRCRAFTLIGHTS/AircraftLights.c:137:6:AircraftLights_PWM_Callback	24	static,ignoring_inline_asm

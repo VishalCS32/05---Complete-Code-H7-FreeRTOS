@@ -1,0 +1,11 @@
+../Core/Src/hmc5883l.c:39:13:HMC5883L_WriteReg	32	static
+../Core/Src/hmc5883l.c:44:9:HMC5883L_ReadReg	32	static
+../Core/Src/hmc5883l.c:51:6:HMC5883L_Init	8	static
+../Core/Src/hmc5883l.c:60:6:HMC5883L_ReadMag	40	static
+../Core/Src/hmc5883l.c:68:6:HMC5883L_ReadMag_DMA	80	static
+../Core/Src/hmc5883l.c:95:6:HMC5883L_DMA_Complete_Callback	16	static
+../Core/Src/hmc5883l.c:104:6:HMC5883L_SetOffsets	16	static
+../Core/Src/hmc5883l.c:110:17:HMC5883L_GetCompassData	4	static
+../Core/Src/hmc5883l.c:114:14:ComputeHeading	24	static
+../Core/Src/hmc5883l.c:123:6:HMC5883L_ProcessMagData	168	static
+../Core/Src/hmc5883l.c:159:18:HMC5883L_GetRawMagData	4	static
