@@ -34,12 +34,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-uint8_t uart6_rx_flag = 0;
-uint8_t uart6_rx_data = 0;
-
-char uart6_rx_buffer[10]; // Size for "cal_accel" (9 chars + null)
-uint8_t uart6_rx_index;
-extern volatile uint8_t data_sent_flag;
 
 /* USER CODE END PD */
 
@@ -50,6 +44,19 @@ extern volatile uint8_t data_sent_flag;
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
+
+uint8_t uart6_rx_flag = 0;
+uint8_t uart6_rx_data = 0;
+
+uint8_t uart4_rx_flag = 0;
+uint8_t uart4_rx_data = 0;
+
+uint8_t ibus_rx_buf[32];
+uint8_t ibus_rx_cplt_flag = 0;
+
+char uart6_rx_buffer[10]; // Size for "cal_accel" (9 chars + null)
+uint8_t uart6_rx_index;
+extern volatile uint8_t data_sent_flag;
 
 /* USER CODE END PV */
 
@@ -66,13 +73,18 @@ extern volatile uint8_t data_sent_flag;
 /* External variables --------------------------------------------------------*/
 extern DMA_HandleTypeDef hdma_i2c1_rx;
 extern DMA_HandleTypeDef hdma_i2c1_tx;
+extern DMA_HandleTypeDef hdma_i2c2_rx;
+extern DMA_HandleTypeDef hdma_i2c2_tx;
 extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c2;
 extern DMA_HandleTypeDef hdma_spi3_rx;
 extern DMA_HandleTypeDef hdma_spi3_tx;
 extern SPI_HandleTypeDef hspi3;
 extern DMA_HandleTypeDef hdma_tim3_ch2;
 extern DMA_HandleTypeDef hdma_tim3_ch3;
 extern TIM_HandleTypeDef htim3;
+extern UART_HandleTypeDef huart4;
+extern UART_HandleTypeDef huart7;
 extern TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN EV */
@@ -262,6 +274,20 @@ void DMA1_Stream5_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA1 stream6 global interrupt.
+  */
+void DMA1_Stream6_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream6_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream6_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_i2c2_rx);
+  /* USER CODE BEGIN DMA1_Stream6_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream6_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM1 update interrupt.
   */
 void TIM1_UP_IRQHandler(void)
@@ -318,6 +344,48 @@ void I2C1_ER_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles I2C2 event interrupt.
+  */
+void I2C2_EV_IRQHandler(void)
+{
+  /* USER CODE BEGIN I2C2_EV_IRQn 0 */
+
+  /* USER CODE END I2C2_EV_IRQn 0 */
+  HAL_I2C_EV_IRQHandler(&hi2c2);
+  /* USER CODE BEGIN I2C2_EV_IRQn 1 */
+
+  /* USER CODE END I2C2_EV_IRQn 1 */
+}
+
+/**
+  * @brief This function handles I2C2 error interrupt.
+  */
+void I2C2_ER_IRQHandler(void)
+{
+  /* USER CODE BEGIN I2C2_ER_IRQn 0 */
+
+  /* USER CODE END I2C2_ER_IRQn 0 */
+  HAL_I2C_ER_IRQHandler(&hi2c2);
+  /* USER CODE BEGIN I2C2_ER_IRQn 1 */
+
+  /* USER CODE END I2C2_ER_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream7 global interrupt.
+  */
+void DMA1_Stream7_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream7_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream7_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_i2c2_tx);
+  /* USER CODE BEGIN DMA1_Stream7_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream7_IRQn 1 */
+}
+
+/**
   * @brief This function handles SPI3 global interrupt.
   */
 void SPI3_IRQHandler(void)
@@ -329,6 +397,83 @@ void SPI3_IRQHandler(void)
   /* USER CODE BEGIN SPI3_IRQn 1 */
 
   /* USER CODE END SPI3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles UART4 global interrupt.
+  */
+void UART4_IRQHandler(void)
+{
+  /* USER CODE BEGIN UART4_IRQn 0 */
+
+	static unsigned char cnt = 0;
+	//    static uint8_t ibus_rx_buf[32];
+
+	    if (LL_USART_IsActiveFlag_RXNE(UART4)) {
+	        uart4_rx_data = LL_USART_ReceiveData8(UART4);
+	        uart4_rx_flag = 1;
+
+	        switch (cnt) {
+	            case 0:
+	                if (uart4_rx_data == 0x20) {
+	                    ibus_rx_buf[cnt] = uart4_rx_data;
+	                    cnt++;
+	                }
+	                break;
+	            case 1:
+	                if (uart4_rx_data == 0x40) {
+	                    ibus_rx_buf[cnt] = uart4_rx_data;
+	                    cnt++;
+	                } else {
+	                    cnt = 0; // Reset if invalid header
+	                }
+	                break;
+	            case 31:
+	                ibus_rx_buf[cnt] = uart4_rx_data;
+	                cnt = 0;
+	                ibus_rx_cplt_flag = 1;
+	                // Send raw packet as hexadecimal to USART6
+//	                char buffer[100];
+//	                int len = snprintf(buffer, sizeof(buffer), "");
+//	                for (uint8_t i = 0; i < 32; i++) {
+//	                    len += snprintf(buffer + len, sizeof(buffer) - len, "%02X ", ibus_rx_buf[i]);
+//	                }
+//	                len += snprintf(buffer + len, sizeof(buffer) - len, "\r\n");
+//
+//	                for (uint8_t i = 0; i < len; i++) {
+//	                    while (!LL_USART_IsActiveFlag_TXE(USART6)) {}
+//	//                    LL_USART_TransmitData8(USART6, buffer[i]);
+//	                }
+//	                while (!LL_USART_IsActiveFlag_TC(USART6)) {}
+	                break;
+	            default:
+	                ibus_rx_buf[cnt] = uart4_rx_data;
+	                cnt++;
+	                break;
+	        }
+	    }
+
+	    // Handle UART errors
+	    if (LL_USART_IsActiveFlag_ORE(UART4) || LL_USART_IsActiveFlag_FE(UART4) || LL_USART_IsActiveFlag_NE(UART4)) {
+	        LL_USART_ClearFlag_ORE(UART4);
+	        LL_USART_ClearFlag_FE(UART4);
+	        LL_USART_ClearFlag_NE(UART4);
+	        cnt = 0; // Reset buffer on error
+	//        LL_USART_TransmitData8(USART6, "\r\n");
+//	        char error_msg[] = "\r\n";
+//	        for (uint8_t i = 0; error_msg[i] != '\0'; i++) {
+//	            while (!LL_USART_IsActiveFlag_TXE(USART6)) {}
+//	//            LL_USART_TransmitData8(USART6, error_msg[i]);
+//	        }
+//	        while (!LL_USART_IsActiveFlag_TC(USART6)) {}
+
+	    }
+
+  /* USER CODE END UART4_IRQn 0 */
+  HAL_UART_IRQHandler(&huart4);
+  /* USER CODE BEGIN UART4_IRQn 1 */
+
+  /* USER CODE END UART4_IRQn 1 */
 }
 
 /**
@@ -351,6 +496,20 @@ void USART6_IRQHandler(void)
   /* USER CODE BEGIN USART6_IRQn 1 */
 
   /* USER CODE END USART6_IRQn 1 */
+}
+
+/**
+  * @brief This function handles UART7 global interrupt.
+  */
+void UART7_IRQHandler(void)
+{
+  /* USER CODE BEGIN UART7_IRQn 0 */
+
+  /* USER CODE END UART7_IRQn 0 */
+  HAL_UART_IRQHandler(&huart7);
+  /* USER CODE BEGIN UART7_IRQn 1 */
+
+  /* USER CODE END UART7_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

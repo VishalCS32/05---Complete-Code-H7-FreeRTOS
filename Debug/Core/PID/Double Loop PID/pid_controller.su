@@ -1,0 +1,5 @@
+../Core/PID/Double Loop PID/pid_controller.c:5:6:pid_init	24	static
+../Core/PID/Double Loop PID/pid_controller.c:47:14:pid_compute	48	static
+../Core/PID/Double Loop PID/pid_controller.c:57:6:pid_cascade_compute	40	static
+../Core/PID/Double Loop PID/pid_controller.c:65:6:pid_rate_compute	32	static
+../Core/PID/Double Loop PID/pid_controller.c:70:6:motor_mixing	40	static

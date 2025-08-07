@@ -17,8 +17,12 @@ RM := rm -rf
 -include Core/W25QXX_OPSI/subdir.mk
 -include Core/Startup/subdir.mk
 -include Core/Src/subdir.mk
+-include Core/RECEIVER/FS-iA6B/subdir.mk
+-include Core/PID/Double\ Loop\ PID/subdir.mk
 -include Core/LED/MAIN_BOARD_RGB/subdir.mk
 -include Core/LED/AIRCRAFTLIGHTS/subdir.mk
+-include Core/ICM42688P/subdir.mk
+-include Core/EEPROM/subdir.mk
 -include Core/BUZZER/subdir.mk
 -include objects.mk
 

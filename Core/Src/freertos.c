@@ -26,7 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include "icm42688p.h"
+#include "../ICM42688P/icm42688p.h"
 #include "semphr.h"
 #include "../LED/MAIN_BOARD_RGB/ws2812.h"
 #include "../LED/AIRCRAFTLIGHTS/AircraftLights.h"
@@ -46,6 +46,7 @@ void run_imu(void);
 extern void run_imu(void);
 extern void run_mag(void);
 extern void sensor_init(void);
+extern void eeprom_startup(void);
 void InitTask(void *argument);
 /* USER CODE END PD */
 
@@ -68,7 +69,14 @@ osThreadId_t Task_100HzHandle;
 const osThreadAttr_t Task_100Hz_attributes = {
   .name = "Task_100Hz",
   .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityNormal1,
+  .priority = (osPriority_t) osPriorityNormal5,
+};
+
+osThreadId_t Task_50HzHandle;
+const osThreadAttr_t Task_50Hz_attributes = {
+  .name = "Task_50Hz",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal4,
 };
 
 /* --- InitTask (Initialization) --- */
@@ -115,6 +123,7 @@ const osThreadAttr_t Task2_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 void Task_1khz_init(void *argument);
 void Task_100Hz_init(void *argument);
+void Task_50Hz_init(void *argument);
 void LedTask(void *argument);
 void AircraftLightsTask(void *argument);
 /* USER CODE END FunctionPrototypes */
@@ -173,7 +182,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_THREADS */
   Task_1khzHandle = osThreadNew(Task_1khz_init, NULL, &Task_1khz_attributes);
 
-  Task_1khzHandle = osThreadNew(Task_100Hz_init, NULL, &Task_100Hz_attributes);
+  Task_100HzHandle = osThreadNew(Task_100Hz_init, NULL, &Task_100Hz_attributes);
+
+  Task_50HzHandle = osThreadNew(Task_50Hz_init, NULL, &Task_50Hz_attributes);
 
   LedTaskHandle = osThreadNew(LedTask, NULL, &LedTask_attributes);
   osThreadSuspend(LedTaskHandle);
@@ -232,21 +243,38 @@ void Task2_init(void *argument)
 void Task_1khz_init(void *argument)
 {
     for(;;) {
-        run_imu();
+//        run_imu();
+    	mixer_run();
         osDelay(1);
     }
 }
 
-void Task_100Hz_init(void *arguement)
+void Task_100Hz_init(void *argument)
 {
 	for(;;) {
 
-		run_mag();
-		osDelay(10);
+//		run_mag();
+		FSiA6B_Print();
+		osDelay(100);
 
 	}
 }
 
+void Task_50Hz_init(void *argument)
+{
+	for(;;) {
+//		printf("Hello, World\n");
+		osDelay(20);
+	}
+}
+
+void Task_1000Hz_init(void *argument)
+{
+	for(;;) {
+		FailSafe_1000Hz();
+		osDelay(1000);
+	}
+}
 /**
   * @brief InitTask: Initializes sensors & WS2812
   */

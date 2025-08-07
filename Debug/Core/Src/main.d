@@ -32,6 +32,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_tim.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_tim_ex.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h \
+ ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_tim.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usart.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_rcc.h \
@@ -59,12 +61,16 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
  ../Core/Inc/dma.h ../Core/Inc/main.h ../Core/Inc/i2c.h \
  ../Core/Inc/octospi.h ../Core/Inc/spi.h ../Core/Inc/tim.h \
- ../Core/Inc/usart.h ../Core/Inc/gpio.h ../Core/Inc/icm42688p.h \
- ../Core/Inc/hmc5883l.h ../Core/Src/../LED/MAIN_BOARD_RGB/ws2812.h \
+ ../Core/Inc/usart.h ../Core/Inc/gpio.h \
+ ../Core/Src/../ICM42688P/icm42688p.h ../Core/Inc/hmc5883l.h \
+ ../Core/Src/../LED/MAIN_BOARD_RGB/ws2812.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/queue.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h \
- ../Core/Inc/targets.h ../Core/Src/../BUZZER/buzzer.h
+ ../Core/Inc/targets.h ../Core/Src/../BUZZER/buzzer.h \
+ ../Core/Src/../EEPROM/eeprom.h \
+ ../Core/Src/../PID/Double\ Loop\ PID/pid_controller.h \
+ ../Core/Inc/../EEPROM/eeprom.h ../Core/Src/../RECEIVER/FS-iA6B/FS-iA6B.h
 ../Core/Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Core/Inc/stm32h7xx_hal_conf.h:
@@ -99,6 +105,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_tim.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_tim_ex.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart.h:
+../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_uart_ex.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_tim.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_usart.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_ll_rcc.h:
@@ -132,7 +140,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/tim.h:
 ../Core/Inc/usart.h:
 ../Core/Inc/gpio.h:
-../Core/Inc/icm42688p.h:
+../Core/Src/../ICM42688P/icm42688p.h:
 ../Core/Inc/hmc5883l.h:
 ../Core/Src/../LED/MAIN_BOARD_RGB/ws2812.h:
 ../Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h:
@@ -140,3 +148,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h:
 ../Core/Inc/targets.h:
 ../Core/Src/../BUZZER/buzzer.h:
+../Core/Src/../EEPROM/eeprom.h:
+../Core/Src/../PID/Double\ Loop\ PID/pid_controller.h:
+../Core/Inc/../EEPROM/eeprom.h:
+../Core/Src/../RECEIVER/FS-iA6B/FS-iA6B.h:

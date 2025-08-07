@@ -29,11 +29,15 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "icm42688p.h"
+#include <stdio.h>
+#include "../ICM42688P/icm42688p.h"
 #include "hmc5883l.h"
 #include "../LED/MAIN_BOARD_RGB/ws2812.h"
 #include "targets.h"
 #include "../BUZZER/buzzer.h"
+#include "../EEPROM/eeprom.h"
+#include "../PID/Double Loop PID/pid_controller.h"
+#include "../RECEIVER/FS-iA6B/FS-iA6B.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,19 +77,55 @@ HMC5883L_Data_t magData;
 
 volatile uint8_t sensors_ready = 0;
 extern TIM_HandleTypeDef htim3;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+unsigned char failsafe_flag = 0;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
 
+extern uint8_t uart6_rx_flag;
+extern uint8_t uart6_rx_data;
+extern uint8_t uart4_rx_flag;
+extern uint8_t uart4_rx_data;
+extern uint8_t ibus_rx_buf[32];
+extern uint8_t ibus_rx_cplt_flag;
+extern uint8_t uart7_rx_data;
+uint8_t telemetry_tx_buf[20];
+
 extern DMA_HandleTypeDef WS2812_DMA; // DMA handle
 extern volatile uint8_t data_sent_flag; // Flag from ws2812.c
+
+void eeprom_startup(void);
+
+float eeprom_pid_read[3];
+float eeprom_gyro_read[3];
+float eeprom_accel_read[3];
+float eeprom_mag_read[3];
+DualPID_t eeprom_roll_pid_read;
+DualPID_t eeprom_pitch_pid_read;
+PID_t eeprom_yaw_rate_pid_read;
+
+AircraftLights_t aircraft_lights;
+
+RuntimeDualPID_t roll_pid;
+RuntimeDualPID_t pitch_pid;
+RuntimePID_t yaw_rate_pid;
+
+HAL_StatusTypeDef status;
+float pressure, temperature, altitude;
+float ground_pressure = 101325.0f;
+
+unsigned char motor_arming_flag = 0;
+unsigned short iBus_SwA_Prev = 0;
+unsigned short iBus_rx_cnt = 0;
+uint16_t ccr[4];
+unsigned short ccr1, ccr2, ccr3, ccr4;
 
 /* USER CODE END PV */
 
@@ -94,6 +134,11 @@ void SystemClock_Config(void);
 static void MPU_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
+
+int Is_iBus_Throttle_Min(void);
+int Is_iBus_Throttle_Armed(void);
+void ESC_Calibration(void);
+int Is_iBus_Received(void);
 
 /* USER CODE END PFP */
 
@@ -141,17 +186,83 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM2_Init();
   MX_OCTOSPI1_Init();
-  MX_SPI2_Init();
+  MX_I2C2_Init();
+  MX_UART4_Init();
+  MX_TIM5_Init();
+  MX_UART7_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
   StartupTone();
 
   LL_USART_EnableIT_RXNE(USART6);
+  LL_USART_EnableIT_RXNE_RXFNE(UART4);
 
   HAL_Delay(500);
 
-  /* === Initialize ICM42688P here === */
-//  ICM42688P_Init(&icm, &hspi3);
+  eeprom_startup();
+
+  // Initialize PID controllers
+  pid_init(&roll_pid, &pitch_pid, &yaw_rate_pid,
+		  &eeprom_roll_pid_read, &eeprom_pitch_pid_read, &eeprom_yaw_rate_pid_read);
+
+  /* *********** ESC Startup Calibration ************ */
+  HAL_Delay(3000);
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_4);
+  /* *********** ESC Startup Calibration END ************ */
+
+  /* *********** iBus Calibration Check ************ */
+  while (Is_iBus_Received() == 0) {
+	  Buzzer_On(3000);
+	  HAL_Delay(200);
+	  Buzzer_Off();
+	  HAL_Delay(200);
+  }
+  if (iBus.SwC == 2000) {
+	  Buzzer_On(1500);
+	  HAL_Delay(200);
+	  Buzzer_On(2000);
+	  HAL_Delay(200);
+	  Buzzer_On(1500);
+	  HAL_Delay(200);
+	  Buzzer_On(2000);
+	  HAL_Delay(200);
+	  Buzzer_Off();
+	  ESC_Calibration();
+	  while (iBus.SwC != 1000) {
+		  Is_iBus_Received();
+		  Buzzer_On(1500);
+		  HAL_Delay(200);
+		  Buzzer_On(2000);
+		  HAL_Delay(200);
+		  Buzzer_Off();
+	  }
+  }
+  /* *********** iBus Calibration Check END ************ */
+
+  /* *********** iBus Throttle Check ************ */
+  while (Is_iBus_Throttle_Min() == 0 || iBus.SwA == 2000) {
+	  Buzzer_On(343);
+	  HAL_Delay(70);
+	  Buzzer_Off();
+	  HAL_Delay(70);
+  }
+  Buzzer_On(1092);
+  HAL_Delay(100);
+  Buzzer_On(592);
+  HAL_Delay(100);
+  Buzzer_On(292);
+  HAL_Delay(100);
+  Buzzer_Off();
+  /* *********** iBus Throttle Check END ************ */
+
+//  LL_TIM_EnableCounter(TIM7);
+//  LL_TIM_EnableIT_UPDATE(TIM7);
+
+  /* === Initialize sensors here === */
 
   HMC5883L_Init();
   uint8_t hmc_id = HMC5883L_ReadReg(HMC5883L_ID_A);
@@ -177,11 +288,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-//	  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_3);
-//	  HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_5);
-//	  HAL_Delay(500);
-
   }
   /* USER CODE END 3 */
 }
@@ -305,7 +411,301 @@ void sensor_init(void){
     printf("Sensor initialization complete. Deleting InitTask...\r\n");
 
     sensors_ready = 1;
+
+    system_startup();
+
 }
+
+void system_startup(void) {
+
+	while (Is_iBus_Throttle_Armed() == 0) {
+//		calibration_task();
+//		if (is_cmd_mode()) {
+//			continue;
+//		}
+
+	}
+
+	/* *********** iBus Throttle Check ************ */
+	while (Is_iBus_Throttle_Min() == 0 || iBus.SwA != 2000) {
+		Buzzer_On(1200);
+		HAL_Delay(300);
+		Buzzer_Off();
+		HAL_Delay(70);
+	}
+	Buzzer_On(1092);
+	HAL_Delay(100);
+	Buzzer_On(592);
+	HAL_Delay(100);
+	Buzzer_On(292);
+	HAL_Delay(100);
+	Buzzer_Off();
+	/* *********** iBus Throttle Check END ************ */
+
+}
+
+void eeprom_startup(void){
+
+	if (EEPROM_Init() != W25Qxx_OK) {
+		printf("EEPROM Init Failed\r\n");
+		while(1)
+		{
+			Buzzer_On(500);
+			HAL_Delay(200);
+			Buzzer_Off();
+			HAL_Delay(200);
+			Buzzer_On(500);
+			HAL_Delay(200);
+			Buzzer_Off();
+			HAL_Delay(200);
+		}
+		Error_Handler();
+	}
+
+	DroneConfig_t config;
+
+	printf("================= Connecting to EEPROM =================\n"
+			"\r\n");
+
+	if (EEPROM_ReadConfig(&config) == W25Qxx_OK) {
+		printf("Config Loaded: Flight Mode %d, PID P: %.2f\r\n",
+				config.flight_mode, config.pid[0]);
+	} else {
+		printf("No valid config found, loading defaults\r\n");
+		DroneConfig_t default_config = {
+				.accel_cal = {0.030256f, -0.026638f, -0.122559f},
+				.gyro_cal = {0.016646f, 0.173536f, -0.355303f},
+				.mag_cal = {1.50f, -1.50f, 0.50f},
+				.pid = {1.0f, 0.1f, 0.5f},
+				.flight_mode = 0,
+				.gps_lat = 0.0f,
+				.gps_lon = 0.0f,
+				.gps_alt = 0.0f,
+				.roll_pid = {
+						.out = {0.62f, 0.01f, 0.10f},
+						.in = {0.30f, 0.07f, 0.010f}
+				},
+				.pitch_pid = {
+						.out = {0.62f, 0.01f, 0.10f},
+						.in = {0.30f, 0.07f, 0.010f}
+				},
+				.yaw_rate_pid = {0.2f, 0.01f, 0.003f},
+				.lights = {
+						.rgb = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 255}},
+						.mode = 0
+				},
+				.crc = 0
+		};
+		default_config.crc = CalculateCRC32((uint8_t*)&default_config, sizeof(DroneConfig_t) - sizeof(uint32_t));
+		if (EEPROM_WriteConfig(&default_config) != W25Qxx_OK) {
+			printf("Failed to write default config\r\n");
+			Error_Handler();
+		}
+		printf("Default config written and verified\r\n");
+	}
+
+	if (EEPROM_GetPID(eeprom_pid_read) == W25Qxx_OK) {
+		printf("EEPROM PID read: P=%.2f, I=%.2f, D=%.2f\r\n",
+				eeprom_pid_read[0], eeprom_pid_read[1], eeprom_pid_read[2]);
+	} else {
+		printf("Failed to read PID\r\n");
+	}
+
+	if (EEPROM_GetGyroCalibration(eeprom_gyro_read) == W25Qxx_OK) {
+		printf("EEPROM Gyro read: X=%.2f, Y=%.2f, Z=%.2f\r\n",
+				eeprom_gyro_read[0], eeprom_gyro_read[1], eeprom_gyro_read[2]);
+	} else {
+		printf("Failed to read EEPROM Gyro Data\r\n");
+	}
+
+	if (EEPROM_GetAccelCalibration(eeprom_accel_read) == W25Qxx_OK) {
+		printf("EEPROM Accel read: X=%.2f, Y=%.2f, Z=%.2f\r\n",
+				eeprom_accel_read[0], eeprom_accel_read[1], eeprom_accel_read[2]);
+	} else {
+		printf("Failed to read EEPROM Accel Data\r\n");
+	}
+
+	if (EEPROM_GetMagCalibration(eeprom_mag_read) == W25Qxx_OK) {
+		printf("EEPROM Mag read: X=%.2f, Y=%.2f, Z=%.2f\r\n",
+				eeprom_mag_read[0], eeprom_mag_read[1], eeprom_mag_read[2]);
+	} else {
+		printf("Failed to read EEPROM Mag Data\r\n");
+	}
+
+	if (EEPROM_GetRollPID(&eeprom_roll_pid_read) == W25Qxx_OK) {
+		printf("Roll PID: Out P=%.3f, I=%.3f, D=%.3f, In P=%.3f, I=%.3f, D=%.3f\r\n",
+				eeprom_roll_pid_read.out.kp, eeprom_roll_pid_read.out.ki, eeprom_roll_pid_read.out.kd,
+				eeprom_roll_pid_read.in.kp, eeprom_roll_pid_read.in.ki, eeprom_roll_pid_read.in.kd);
+	} else {
+		printf("Failed to read Roll PID\r\n");
+	}
+
+	if (EEPROM_GetPitchPID(&eeprom_pitch_pid_read) == W25Qxx_OK) {
+		printf("Pitch PID: Out P=%.3f, I=%.3f, D=%.3f, In P=%.3f, I=%.3f, D=%.3f\r\n",
+				eeprom_pitch_pid_read.out.kp, eeprom_pitch_pid_read.out.ki, eeprom_pitch_pid_read.out.kd,
+				eeprom_pitch_pid_read.in.kp, eeprom_pitch_pid_read.in.ki, eeprom_pitch_pid_read.in.kd);
+	} else {
+		printf("Failed to read Pitch PID\r\n");
+	}
+
+	if (EEPROM_GetYawRatePID(&eeprom_yaw_rate_pid_read) == W25Qxx_OK) {
+		printf("Yaw Rate PID: P=%.3f, I=%.3f, D=%.3f\r\n",
+				eeprom_yaw_rate_pid_read.kp, eeprom_yaw_rate_pid_read.ki, eeprom_yaw_rate_pid_read.kd);
+	} else {
+		printf("Failed to read Yaw Rate PID\r\n");
+	}
+
+	if (EEPROM_GetAircraftLights(&aircraft_lights) == W25Qxx_OK) {
+		printf("Lights: LED1(R=%d,G=%d,B=%d), LED2(R=%d,G=%d,B=%d), LED3(R=%d,G=%d,B=%d), LED4(R=%d,G=%d,B=%d), Mode=%d\r\n",
+				aircraft_lights.rgb[0][0], aircraft_lights.rgb[0][1], aircraft_lights.rgb[0][2],
+				aircraft_lights.rgb[1][0], aircraft_lights.rgb[1][1], aircraft_lights.rgb[1][2],
+				aircraft_lights.rgb[2][0], aircraft_lights.rgb[2][1], aircraft_lights.rgb[2][2],
+				aircraft_lights.rgb[3][0], aircraft_lights.rgb[3][1], aircraft_lights.rgb[3][2],
+				aircraft_lights.mode);
+	} else {
+		printf("Failed to read Aircraft Lights\r\n");
+	}
+
+	printf("\r\n"
+			"================= EEPROM Data Fetched =================\n"
+			"\r\n");
+
+}
+
+int Is_iBus_Throttle_Min(void) {
+    if (ibus_rx_cplt_flag == 1) {
+        ibus_rx_cplt_flag = 0;
+        if (iBus_Check_CHKSUM(&ibus_rx_buf[0], 32) == 1) {
+            iBus_Parsing(&ibus_rx_buf[0], &iBus);
+            if (iBus.LV < 1010)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+void mixer_run(void) {
+
+	// Motor mixing
+	if (motor_arming_flag == 1 && failsafe_flag == 0) {
+//		motor_mixing(roll_out, pitch_out, yaw_out, throttle, ccr);
+
+		ccr1 = 1050 + ((iBus.LV - 1000) * 950) / 1000;
+		ccr2 = 1050 + ((iBus.LV - 1000) * 950) / 1000;
+		ccr3 = 1050 + ((iBus.LV - 1000) * 950) / 1000;
+		ccr4 = 1050 + ((iBus.LV - 1000) * 950) / 1000;
+
+		TIM5->CCR1 = ccr1;
+		TIM5->CCR2 = ccr2;
+		TIM5->CCR3 = ccr3;
+		TIM5->CCR4 = ccr4;
+	} else {
+		TIM5->CCR1 = 1000;
+		TIM5->CCR2 = 1000;
+		TIM5->CCR3 = 1000;
+		TIM5->CCR4 = 1000;
+	}
+
+	HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_3);
+
+
+
+	if (iBus.SwA == 2000 && iBus_SwA_Prev != 2000) {
+		if (iBus.LV < 1010) {
+			motor_arming_flag = 1;
+		}
+	}
+	iBus_SwA_Prev = iBus.SwA;
+
+	if (iBus.SwA != 2000) {
+		motor_arming_flag = 0;
+	}
+
+	if (ibus_rx_cplt_flag == 1) {
+		ibus_rx_cplt_flag = 0;
+		if (iBus_Check_CHKSUM(&ibus_rx_buf[0], 32) == 1) {
+			//			main_led(0, 0, 255, 0, 0.3);
+			//			main_led(0, 0, 255, 0, 0.0);
+			iBus_Parsing(&ibus_rx_buf[0], &iBus);
+			iBus_rx_cnt++;
+			if (iBus_isActiveFailsafe(&iBus) == 1) {
+				failsafe_flag = 1;
+				Buzzer_On(292);
+				HAL_Delay(50);
+				Buzzer_Off();
+			} else {
+				failsafe_flag = 0;
+				Buzzer_Off();
+			}
+		}
+	}
+
+	if (failsafe_flag == 1 || failsafe_flag == 2) {
+		Buzzer_On(292);
+		HAL_Delay(50);
+		Buzzer_Off();
+	}
+
+}
+
+void FSiA6B_Print(void) {
+	printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t\n",
+			iBus.RH, iBus.RV, iBus.LV, iBus.LH, iBus.SwA, iBus.SwB, iBus.SwC, iBus.SwD, iBus.VrA, iBus.VrB);
+}
+
+void FailSafe_1000Hz(void) {
+
+	if (iBus_rx_cnt == 0) {
+		failsafe_flag = 2;
+	}
+	iBus_rx_cnt = 0;
+}
+
+int Is_iBus_Throttle_Armed(void) {
+    if (ibus_rx_cplt_flag == 1) {
+        ibus_rx_cplt_flag = 0;
+        if (iBus_Check_CHKSUM(&ibus_rx_buf[0], 32) == 1) {
+            iBus_Parsing(&ibus_rx_buf[0], &iBus);
+            if (iBus.SwA >= 1900)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+void ESC_Calibration(void) {
+    TIM5->CCR1 = 2000;
+    TIM5->CCR2 = 2000;
+    TIM5->CCR3 = 2000;
+    TIM5->CCR4 = 2000;
+    main_led(0, 0, 255, 0, 0.1, 1);
+    HAL_Delay(7000);
+    TIM5->CCR1 = 1000;
+    TIM5->CCR2 = 1000;
+    TIM5->CCR3 = 1000;
+    TIM5->CCR4 = 1000;
+    main_led(0, 0, 255, 0, 0.1, 1);
+    HAL_Delay(8000);
+    main_led(0, 0, 255, 0, 0.1, 1);
+}
+
+int Is_iBus_Received(void) {
+    if (ibus_rx_cplt_flag == 1) {
+        ibus_rx_cplt_flag = 0;
+        if (iBus_Check_CHKSUM(&ibus_rx_buf[0], 32) == 1) {
+            iBus_Parsing(&ibus_rx_buf[0], &iBus);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == UART7) {
+        HAL_UART_Receive_IT(&huart7, &uart7_rx_data, 1);
+    }
+}
+
 /* USER CODE END 4 */
 
  /* MPU Configuration */
